@@ -15,7 +15,7 @@
 
     profiler:stop()
 
-    local outfile = io.open( "profile.txt", "w+" )
+    local outfile = io.open( "exports/profile.txt", "w+" )
     profiler:report( outfile )
     outfile:close()
 

@@ -1,6 +1,7 @@
 [submodule "plugins/stonesense"]
 	path = plugins/stonesense
-	url = ../../DFHack/stonesense.git
+	url = https://github.com/utah27397/stonesense.git
+	branch = packaging/0.47.05-r8
 [submodule "plugins/isoworld"]
 	path = plugins/isoworld
 	url = ../../DFHack/isoworld.git
@@ -12,7 +13,8 @@
 	url = ../../DFHack/clsocket.git
 [submodule "scripts2"]
 	path = scripts
-	url = ../../DFHack/scripts.git
+	url = https://github.com/utah27397/scripts.git
+	branch = packaging/0.47.05-r8
 [submodule "depends/jsoncpp"]
 	path = depends/jsoncpp-sub
 	url = ../../DFHack/jsoncpp.git

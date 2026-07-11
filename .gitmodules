@@ -4,32 +4,41 @@
 	branch = packaging/0.47.05-r8
 [submodule "plugins/isoworld"]
 	path = plugins/isoworld
-	url = ../../DFHack/isoworld.git
+	url = https://github.com/utah27397/isoworld.git
+	branch = packaging/0.47.05-r8
 [submodule "library/xml"]
 	path = library/xml
-	url = ../../DFHack/df-structures.git
+	url = https://github.com/utah27397/df-structures.git
+	branch = packaging/0.47.05-r8
 [submodule "depends/clsocket"]
 	path = depends/clsocket
-	url = ../../DFHack/clsocket.git
+	url = https://github.com/utah27397/clsocket.git
+	branch = packaging/0.47.05-r8
 [submodule "scripts2"]
 	path = scripts
 	url = https://github.com/utah27397/scripts.git
 	branch = packaging/0.47.05-r8
 [submodule "depends/jsoncpp"]
 	path = depends/jsoncpp-sub
-	url = ../../DFHack/jsoncpp.git
+	url = https://github.com/utah27397/jsoncpp.git
+	branch = packaging/0.47.05-r8
 [submodule "depends/xlsxio"]
 	path = depends/xlsxio
-	url = ../../DFHack/xlsxio.git
+	url = https://github.com/utah27397/xlsxio.git
+	branch = packaging/0.47.05-r8
 [submodule "depends/libzip"]
 	path = depends/libzip
-	url = ../../DFHack/libzip.git
+	url = https://github.com/utah27397/libzip.git
+	branch = packaging/0.47.05-r8
 [submodule "depends/libexpat"]
 	path = depends/libexpat
-	url = ../../DFHack/libexpat.git
+	url = https://github.com/utah27397/libexpat.git
+	branch = packaging/0.47.05-r8
 [submodule "depends/luacov"]
 	path = depends/luacov
-	url = ../../DFHack/luacov.git
+	url = https://github.com/utah27397/luacov.git
+	branch = packaging/0.47.05-r8
 [submodule "depends/googletest"]
 	path = depends/googletest
-	url = ../../google/googletest.git
+	url = https://github.com/utah27397/googletest.git
+	branch = packaging/0.47.05-r8

@@ -73,6 +73,7 @@ using namespace std;
 #include "df/nemesis_record.h"
 #include "df/squad.h"
 #include "df/tile_occupancy.h"
+#include "df/training_assignment.h"
 #include "df/ui.h"
 #include "df/unit_inventory_item.h"
 #include "df/unit_misc_trait.h"
@@ -502,6 +503,43 @@ bool Units::isDomesticated(df::unit* unit)
         }
     }
     return tame;
+}
+
+static df::training_assignment *getTrainingAssignment(df::unit *unit)
+{
+    if (!ui)
+        return nullptr;
+
+    return binsearch_in_vector(ui->equipment.training_assignments,
+        &df::training_assignment::animal_id, unit->id);
+}
+
+bool Units::isMarkedForTraining(df::unit *unit)
+{
+    CHECK_NULL_POINTER(unit);
+    return getTrainingAssignment(unit) != nullptr;
+}
+
+bool Units::isMarkedForTaming(df::unit *unit)
+{
+    CHECK_NULL_POINTER(unit);
+    auto assignment = getTrainingAssignment(unit);
+    return assignment && !assignment->flags.bits.train_war
+        && !assignment->flags.bits.train_hunt;
+}
+
+bool Units::isMarkedForWarTraining(df::unit *unit)
+{
+    CHECK_NULL_POINTER(unit);
+    auto assignment = getTrainingAssignment(unit);
+    return assignment && assignment->flags.bits.train_war;
+}
+
+bool Units::isMarkedForHuntTraining(df::unit *unit)
+{
+    CHECK_NULL_POINTER(unit);
+    auto assignment = getTrainingAssignment(unit);
+    return assignment && assignment->flags.bits.train_hunt;
 }
 
 bool Units::isMarkedForSlaughter(df::unit* unit)
@@ -1025,9 +1063,12 @@ df::unit_misc_trait *Units::getMiscTrait(df::unit *unit, df::misc_trait_type typ
 // get race name by id or unit pointer
 string Units::getRaceNameById(int32_t id)
 {
-    df::creature_raw *raw = world->raws.creatures.all[id];
-    if (raw)
-        return raw->creature_id;
+    if (id >= 0 && size_t(id) < world->raws.creatures.all.size())
+    {
+        df::creature_raw *raw = world->raws.creatures.all[id];
+        if (raw)
+            return raw->creature_id;
+    }
     return "";
 }
 string Units::getRaceName(df::unit* unit)
@@ -1058,9 +1099,12 @@ string Units::getPhysicalDescription(df::unit* unit)
 // get plural of race name (used for display in autobutcher UI and for sorting the watchlist)
 string Units::getRaceNamePluralById(int32_t id)
 {
-    df::creature_raw *raw = world->raws.creatures.all[id];
-    if (raw)
-        return raw->name[1]; // second field is plural of race name
+    if (id >= 0 && size_t(id) < world->raws.creatures.all.size())
+    {
+        df::creature_raw *raw = world->raws.creatures.all[id];
+        if (raw)
+            return raw->name[1]; // second field is plural of race name
+    }
     return "";
 }
 
@@ -1072,9 +1116,12 @@ string Units::getRaceNamePlural(df::unit* unit)
 
 string Units::getRaceBabyNameById(int32_t id)
 {
-    df::creature_raw *raw = world->raws.creatures.all[id];
-    if (raw)
-        return raw->general_baby_name[0];
+    if (id >= 0 && size_t(id) < world->raws.creatures.all.size())
+    {
+        df::creature_raw *raw = world->raws.creatures.all[id];
+        if (raw)
+            return raw->general_baby_name[0];
+    }
     return "";
 }
 
@@ -1086,9 +1133,12 @@ string Units::getRaceBabyName(df::unit* unit)
 
 string Units::getRaceChildNameById(int32_t id)
 {
-    df::creature_raw *raw = world->raws.creatures.all[id];
-    if (raw)
-        return raw->general_child_name[0];
+    if (id >= 0 && size_t(id) < world->raws.creatures.all.size())
+    {
+        df::creature_raw *raw = world->raws.creatures.all[id];
+        if (raw)
+            return raw->general_child_name[0];
+    }
     return "";
 }
 

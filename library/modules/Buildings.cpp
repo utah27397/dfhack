@@ -68,6 +68,7 @@ using namespace DFHack;
 #include "df/building_stockpilest.h"
 #include "df/building_trapst.h"
 #include "df/building_water_wheelst.h"
+#include "df/building_weaponst.h"
 #include "df/building_wellst.h"
 #include "df/building_workshopst.h"
 #include "df/buildings_other_id.h"
@@ -505,6 +506,12 @@ df::building *Buildings::allocInstance(df::coord pos, df::building_type type, in
     case building_type::Bridge:
     {
         if (VIRTUAL_CAST_VAR(obj, df::building_bridgest, bld))
+            obj->gate_flags.bits.closed = false;
+        break;
+    }
+    case building_type::Weapon:
+    {
+        if (VIRTUAL_CAST_VAR(obj, df::building_weaponst, bld))
             obj->gate_flags.bits.closed = false;
         break;
     }
@@ -1484,10 +1491,10 @@ StockpileIterator& StockpileIterator::operator++() {
 
         while (current >= block->items.size()) {
             // Out of items in this block; find the next block to search.
-            if (block->map_pos.x + 16 < stockpile->x2) {
+            if (block->map_pos.x + 16 <= stockpile->x2) {
                 block = Maps::getTileBlock(block->map_pos.x + 16, block->map_pos.y, stockpile->z);
                 current = 0;
-            } else if (block->map_pos.y + 16 < stockpile->y2) {
+            } else if (block->map_pos.y + 16 <= stockpile->y2) {
                 block = Maps::getTileBlock(stockpile->x1, block->map_pos.y + 16, stockpile->z);
                 current = 0;
             } else {
@@ -1500,7 +1507,7 @@ StockpileIterator& StockpileIterator::operator++() {
 
         // If the current item isn't properly stored, move on to the next.
         item = df::item::find(block->items[current]);
-        if (!item->flags.bits.on_ground) {
+        if (!item || !item->flags.bits.on_ground) {
             continue;
         }
 

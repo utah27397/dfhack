@@ -720,7 +720,14 @@ df::coord Items::getPosition(df::item *item)
     return item->pos;
 }
 
-static char quality_table[] = { 0, '-', '+', '*', '=', '@' };
+static const char quality_table[] = {
+    '\0',   // (base)
+    '-',    // well-crafted
+    '+',    // finely-crafted
+    '*',    // superior quality
+    '\xF0', // exceptional
+    '\x0F'  // masterful
+};
 
 static void addQuality(std::string &tmp, int quality)
 {
@@ -825,7 +832,7 @@ std::string Items::getDescription(df::item *item, int type, bool decorate)
         addQuality(tmp, item->getQuality());
 
         if (item->isImproved()) {
-            tmp = "<" + tmp + ">";
+            tmp = '\xAE' + tmp + '\xAF';
             addQuality(tmp, item->getImprovementQuality());
         }
     }
@@ -876,9 +883,11 @@ static bool detachItem(MapExtras::MapCache &mc, df::item *item)
             virtual_cast<df::general_ref_projectile>(
                 Items::getGeneralRef(item, general_ref_type::PROJECTILE)))
     {
-        return linked_list_remove(&world->proj_list, ref->projectile_id) &&
-            DFHack::removeRef(item->general_refs,
-                              general_ref_type::PROJECTILE, ref->getID());
+        int32_t proj_id = ref->projectile_id;
+        bool ref_removed = DFHack::removeRef(
+            item->general_refs, general_ref_type::PROJECTILE, proj_id);
+        bool link_removed = linked_list_remove(&world->proj_list, proj_id);
+        return ref_removed && link_removed;
     }
 
     if (item->flags.bits.on_ground)
@@ -1533,6 +1542,8 @@ int32_t Items::createItem(df::item_type item_type, int16_t item_subtype, int16_t
             0, df::historical_entity::find(unit->civ_id),
             ((type == df::enums::game_type::DWARF_MAIN) || (type == df::enums::game_type::DWARF_RECLAIM)) ? df::world_site::find(df::global::ui->site_id) : NULL,
             NULL);
+    delete prod;
+
     if ( out_items.size() != 1 )
         return -1;
 

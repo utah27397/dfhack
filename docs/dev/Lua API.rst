@@ -1321,6 +1321,10 @@ Units module
 * ``dfhack.units.isTame(unit)``
 * ``dfhack.units.isTamable(unit)``
 * ``dfhack.units.isDomesticated(unit)``
+* ``dfhack.units.isMarkedForTraining(unit)``
+* ``dfhack.units.isMarkedForTaming(unit)``
+* ``dfhack.units.isMarkedForWarTraining(unit)``
+* ``dfhack.units.isMarkedForHuntTraining(unit)``
 * ``dfhack.units.isMarkedForSlaughter(unit)``
 * ``dfhack.units.isGelded(unit)``
 * ``dfhack.units.isEggLayer(unit)``

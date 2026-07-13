@@ -11,12 +11,14 @@
 #include "df/buildings_other_id.h"
 #include "df/global_objects.h"
 #include "df/item.h"
+#include "df/item_eggst.h"
 #include "df/unit.h"
 #include "df/building.h"
 #include "df/items_other_id.h"
 #include "df/creature_raw.h"
 #include "modules/MapCache.h"
 #include "modules/Items.h"
+#include "modules/Job.h"
 
 
 using std::vector;
@@ -43,20 +45,23 @@ static void eggscan(color_ostream &out)
         auto type = build->getType();
         if (df::enums::building_type::NestBox == type)
         {
-            bool fertile = false;
             df::building_nest_boxst *nb = virtual_cast<df::building_nest_boxst>(build);
-            if (nb->claimed_by != -1)
-            {
-                df::unit* u = df::unit::find(nb->claimed_by);
-                if (u && u->pregnancy_timer > 0)
-                    fertile = true;
-            }
+            // The first contained item is the nestbox construction material.
             for (size_t j = 1; j < nb->contained_items.size(); j++)
             {
-                df::item* item = nb->contained_items[j]->item;
+                auto *item = virtual_cast<df::item_eggst>(nb->contained_items[j]->item);
+                if (!item)
+                    continue;
+
+                bool fertile = item->egg_flags.bits.fertile;
                 if (item->flags.bits.forbid != fertile)
                 {
                     item->flags.bits.forbid = fertile;
+                    if (fertile && item->flags.bits.in_job) {
+                        auto job_ref = Items::getSpecificRef(item, specific_ref_type::JOB);
+                        if (job_ref && job_ref->data.job)
+                            Job::removeJob(job_ref->data.job);
+                    }
                     out << item->getStackSize() << " eggs " << (fertile ? "forbidden" : "unforbidden.") << endl;
                 }
             }

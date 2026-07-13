@@ -62,6 +62,28 @@ string searchAbbreviations(string in)
     }
 };
 
+static void discardTreeSeedLimits()
+{
+    map<int32_t, int16_t> watchMap;
+    Kitchen::fillWatchMap(watchMap);
+    for (auto &entry : watchMap)
+    {
+        int32_t plant_id = entry.first;
+        if (plant_id < 0 || static_cast<size_t>(plant_id) >= world->raws.plants.all.size())
+        {
+            Kitchen::removeLimit(plant_id);
+            continue;
+        }
+
+        auto plant = world->raws.plants.all[plant_id];
+        if (!plant || !plant->flags.is_set(plant_raw_flags::TREE))
+            continue;
+
+        Kitchen::removeLimit(plant_id);
+        Kitchen::allowPlantSeedCookery(plant_id);
+    }
+}
+
 DFhackCExport command_result plugin_enable(color_ostream &out, bool enable)
 {
     if(enable == true)
@@ -92,7 +114,8 @@ command_result df_seedwatch(color_ostream &out, vector<string>& parameters)
     for(size_t i = 0; i < world->raws.plants.all.size(); ++i)
     {
         auto & plant = world->raws.plants.all[i];
-        if (plant->material_defs.type[plant_material_def::seed] != -1)
+        if (plant->material_defs.type[plant_material_def::seed] != -1 &&
+            !plant->flags.is_set(plant_raw_flags::TREE))
             plantIDs[plant->id] = i;
     }
 
@@ -105,6 +128,8 @@ command_result df_seedwatch(color_ostream &out, vector<string>& parameters)
         // just print the help
         return CR_WRONG_USAGE;
     }
+
+    discardTreeSeedLimits();
 
     string par;
     int limit;
@@ -242,7 +267,9 @@ DFhackCExport command_result plugin_init(color_ostream &out, vector<PluginComman
 
 DFhackCExport command_result plugin_onstatechange(color_ostream &out, state_change_event event)
 {
-    if (event == SC_MAP_UNLOADED) {
+    if (event == SC_MAP_LOADED) {
+        discardTreeSeedLimits();
+    } else if (event == SC_MAP_UNLOADED) {
         if (running)
             out.print("seedwatch deactivated due to game unload\n");
         running = false;
@@ -279,7 +306,7 @@ DFhackCExport command_result plugin_onupdate(color_ostream &out)
         {
             df::item *item = world->items.other[items_other_id::SEEDS][i];
             MaterialInfo mat(item);
-            if (!mat.isPlant())
+            if (!mat.isPlant() || mat.plant->flags.is_set(plant_raw_flags::TREE))
                 continue;
             if (!ignoreSeeds(item->flags))
                 ++seedCount[mat.plant->index];

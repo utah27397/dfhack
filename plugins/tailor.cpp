@@ -40,6 +40,7 @@ DFHACK_PLUGIN_IS_ENABLED(enabled);
 
 REQUIRE_GLOBAL(world);
 REQUIRE_GLOBAL(ui);
+REQUIRE_GLOBAL(standing_orders_use_dyed_cloth);
 
 class Tailor {
     // ARMOR, SHOES, HELM, GLOVES, PANTS
@@ -109,7 +110,6 @@ private:
 
     map<pair<df::item_type, int>, int> available; // key is item type & size
     map<pair<df::item_type, int>, int> needed;    // same
-    map<pair<df::item_type, int>, int> queued;    // same
 
     map<int, int> sizes; // this maps body size to races
 
@@ -128,7 +128,6 @@ private:
     {
         available.clear();
         needed.clear();
-        queued.clear();
         sizes.clear();
         orders.clear();
         supply.clear();
@@ -144,8 +143,13 @@ private:
                 continue;
             if (i->getWear() >= 1)
                 continue;
+
+            const int32_t maker_race = i->getMakerRace();
+            if (maker_race < 0 || static_cast<size_t>(maker_race) >= world->raws.creatures.all.size())
+                continue;
+
             df::item_type t = i->getType();
-            int size = world->raws.creatures.all[i->getMakerRace()]->adultsize;
+            int size = world->raws.creatures.all[maker_race]->adultsize;
 
             available[make_pair(t, size)] += 1;
         }
@@ -153,11 +157,13 @@ private:
 
     void scan_materials()
     {
+        const bool require_dyed = standing_orders_use_dyed_cloth && *standing_orders_use_dyed_cloth;
+
         for (auto i : world->items.other[df::items_other_id::CLOTH])
         {
             if (i->flags.whole & bad_flags.whole)
                 continue;
-            if (!i->hasImprovements()) // only count dyed
+            if (require_dyed && !i->isDyed())
                 continue;
             MaterialInfo mat(i);
             int ss = i->getStackSize();
@@ -190,18 +196,19 @@ private:
             if (!Units::isOwnCiv(u) ||
                 !Units::isOwnGroup(u) ||
                 !Units::isActive(u) ||
-                Units::isBaby(u))
-                continue; // skip units we don't control
+                Units::isBaby(u) ||
+                !Units::casteFlagSet(u->race, u->caste, df::enums::caste_raw_flags::EQUIPS))
+                continue; // skip units we don't control or that cannot wear clothing
 
             set <df::item_type> wearing;
-            wearing.clear();
-
+            set <df::item_type> ordered;
             deque<df::item*> worn;
-            worn.clear();
 
             for (auto inv : u->inventory)
             {
                 if (inv->mode != df::unit_inventory_item::Worn)
+                    continue;
+                if (!inv->item->isClothing())
                     continue;
                 if (inv->item->getWear() > 0)
                     worn.push_back(inv->item);
@@ -209,25 +216,33 @@ private:
                     wearing.insert(inv->item->getType());
             }
 
-            int size = world->raws.creatures.all[u->race]->adultsize;
-            sizes[size] = u->race;
-
-            for (auto ty : set<df::item_type>{ df::item_type::ARMOR, df::item_type::PANTS, df::item_type::SHOES })
-            {
-                if (wearing.count(ty) == 0)
-                    needed[make_pair(ty, size)] += 1;
-            }
+            int unit_size = world->raws.creatures.all[u->race]->adultsize;
+            sizes[unit_size] = u->race;
 
             for (auto w : worn)
             {
-                auto ty = w->getType();
-                auto o = itemTypeMap.at(ty);
+                if (w->getEffectiveArmorLevel() > 0)
+                    continue;
 
-                int size = world->raws.creatures.all[w->getMakerRace()]->adultsize;
+                auto ty = w->getType();
+
+                const int32_t maker_race = w->getMakerRace();
+                if (maker_race < 0 || static_cast<size_t>(maker_race) >= world->raws.creatures.all.size())
+                    continue;
+
                 std::string description;
                 w->getItemDescription(&description, 0);
 
-                if (available[make_pair(ty, size)] > 0)
+                if (wearing.count(ty) == 0)
+                {
+                    if (ordered.count(ty) == 0)
+                    {
+                        needed[make_pair(ty, unit_size)] += 1;
+                        ordered.insert(ty);
+                    }
+                }
+
+                if (wearing.count(ty) > 0)
                 {
                     if (w->flags.bits.owned)
                     {
@@ -241,19 +256,16 @@ private:
                         );
                     }
 
-                    if (wearing.count(ty) == 0)
-                        available[make_pair(ty, size)] -= 1;
-
                     if (w->getWear() > 1)
                         w->flags.bits.dump = true;
                 }
-                else
+            }
+
+            for (auto ty : set<df::item_type>{ df::item_type::ARMOR, df::item_type::PANTS, df::item_type::SHOES })
+            {
+                if (wearing.count(ty) == 0 && ordered.count(ty) == 0)
                 {
-                    //                out->print("%s worn by %s needs replacement\n",
-                    //                    description.c_str(),
-                    //                    Translation::TranslateName(&u->name, false).c_str()
-                    //                );
-                    orders[make_tuple(o, w->getSubtype(), size)] += 1;
+                    needed[make_pair(ty, unit_size)] += 1;
                 }
             }
         }
@@ -268,6 +280,11 @@ private:
             df::item_type ty = a.first.first;
             int size = a.first.second;
             int count = a.second;
+
+            count -= available[make_pair(ty, size)];
+
+            if (count <= 0)
+                continue;
 
             int sub = 0;
             vector<int16_t> v;
@@ -298,8 +315,9 @@ private:
                 }
             }
 
-            const df::job_type j = itemTypeMap.at(ty);
-            orders[make_tuple(j, sub, size)] += count;
+            auto job_type = itemTypeMap.find(ty);
+            if (job_type != itemTypeMap.end())
+                orders[make_tuple(job_type->second, sub, size)] += count;
         }
     }
 
@@ -311,14 +329,22 @@ private:
             if (f == jobTypeMap.end())
                 continue;
 
-            auto sub = o->item_subtype;
             int race = o->hist_figure_id;
+
+            for (auto& material : all_materials)
+            {
+                if (o->material_category.whole == material.job_material.whole)
+                    supply[material] -= o->amount_left;
+            }
+
             if (race == -1)
                 continue; // -1 means that the race of the worker will determine the size made; we must ignore these jobs
+            if (race < 0 || static_cast<size_t>(race) >= world->raws.creatures.all.size())
+                continue;
 
             int size = world->raws.creatures.all[race]->adultsize;
 
-            orders[make_tuple(o->job_type, sub, size)] -= o->amount_left;
+            needed[make_pair(f->second, size)] -= o->amount_left;
         }
 
     }
@@ -335,6 +361,12 @@ private:
 
             tie(ty, sub, size) = o.first;
             int count = o.second;
+
+            if (count > 0 && sizes.count(size) == 0)
+            {
+                out->printerr("tailor: cannot determine race for clothing of size %d, skipped\n", size);
+                continue;
+            }
 
             if (count > 0)
             {
@@ -450,13 +482,13 @@ public:
 
         scan_replacements();
 
+        // account for existing orders before calculating new ones
+
+        scan_existing_orders();
+
         // create new orders
 
         create_orders();
-
-        // scan existing orders and subtract
-
-        scan_existing_orders();
 
         // place orders
 

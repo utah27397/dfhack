@@ -17,11 +17,13 @@ using namespace std;
 #include "modules/Maps.h"
 #include "modules/Gui.h"
 #include "modules/Items.h"
+#include "modules/Job.h"
 #include "modules/Materials.h"
 #include "modules/MapCache.h"
 
 #include "DataDefs.h"
 #include "df/item.h"
+#include "df/items_other_id.h"
 #include "df/world.h"
 #include "df/general_ref.h"
 #include "df/viewscreen_dwarfmodest.h"
@@ -335,8 +337,6 @@ static command_result autodump_main(color_ostream &out, vector <string> & parame
         out.printerr("Map is not available!\n");
         return CR_FAILURE;
     }
-    size_t numItems = world->items.all.size();
-
     MapCache MC;
     int dumped_total = 0;
 
@@ -370,9 +370,8 @@ static command_result autodump_main(color_ostream &out, vector <string> & parame
     }
 
     // proceed with the dumpification operation
-    for(size_t i=0; i< numItems; i++)
+    for (auto itm : world->items.other[df::items_other_id::IN_PLAY])
     {
-        df::item * itm = world->items.all[i];
         DFCoord pos_item(itm->pos.x, itm->pos.y, itm->pos.z);
 
         // only dump the stuff marked for dumping and laying on the ground
@@ -397,14 +396,22 @@ static command_result autodump_main(color_ostream &out, vector <string> & parame
 
         if(!destroy) // move to cursor
         {
-            // Change flags to indicate the dump was completed, as if by super-dwarfs
-            itm->flags.bits.dump = false;
-            itm->flags.bits.forbid = true;
-
             // Don't move items if they're already at the cursor
             if (pos_cursor != pos_item)
             {
-                if (!Items::moveToGround(MC, itm, pos_cursor))
+                if (itm->flags.bits.in_job) {
+                    if (auto job_ref = Items::getSpecificRef(itm, specific_ref_type::JOB))
+                        Job::removeJob(job_ref->data.job);
+                }
+
+                if (Items::moveToGround(MC, itm, pos_cursor))
+                {
+                    // Change flags to indicate the dump was completed, as if by super-dwarfs
+                    itm->flags.bits.dump = false;
+                    itm->flags.bits.trader = false;
+                    itm->flags.bits.forbid = true;
+                }
+                else
                     out.print("Could not move item: %s\n",
                               Items::getDescription(itm, 0, true).c_str());
             }

@@ -104,8 +104,9 @@ selectability selectablePlant(const df::plant_raw *plant, bool farming)
         return selectability::Nonselectable;
     }
 
-    if (basic_mat.material->flags.is_set(material_flags::EDIBLE_RAW) ||
-        basic_mat.material->flags.is_set(material_flags::EDIBLE_COOKED))
+    if (basic_mat.isValid() &&
+        (basic_mat.material->flags.is_set(material_flags::EDIBLE_RAW) ||
+         basic_mat.material->flags.is_set(material_flags::EDIBLE_COOKED)))
     {
 //        out.print("%s is edible\n", plant->id.c_str());
         if (farming)
@@ -138,8 +139,9 @@ selectability selectablePlant(const df::plant_raw *plant, bool farming)
         }
     }
 
-    if (basic_mat.material->reaction_product.id.size() > 0 ||
-        basic_mat.material->reaction_class.size() > 0)
+    if (basic_mat.isValid() &&
+        (basic_mat.material->reaction_product.id.size() > 0 ||
+         basic_mat.material->reaction_class.size() > 0))
     {
 //        out.print("%s has a reaction\n", plant->id.c_str());
         if (farming)
@@ -168,10 +170,11 @@ selectability selectablePlant(const df::plant_raw *plant, bool farming)
 
                 if (plant->growths[i]->item_type == df::item_type::PLANT_GROWTH)
                 {
-                    for (size_t k = 0; growth_mat.material->reaction_product.material.mat_type.size(); k++)
+                    auto &mat = growth_mat.material->reaction_product.material;
+                    for (size_t k = 0; k < mat.mat_type.size(); k++)
                     {
-                        if (growth_mat.material->reaction_product.material.mat_type[k] == plant->material_defs.type[plant_material_def::seed] &&
-                            growth_mat.material->reaction_product.material.mat_index[k] == plant->material_defs.idx[plant_material_def::seed])
+                        if (mat.mat_type[k] == plant->material_defs.type[plant_material_def::seed] &&
+                            mat.mat_index[k] == plant->material_defs.idx[plant_material_def::seed])
                         {
                             seedSource = true;
                             break;
@@ -269,8 +272,16 @@ bool designate(const df::plant *plant, bool farming) {
     df::plant_raw *plant_raw = world->raws.plants.all[plant->material];
     const DFHack::MaterialInfo basic_mat = DFHack::MaterialInfo(plant_raw->material_defs.type[plant_material_def::basic_mat], plant_raw->material_defs.idx[plant_material_def::basic_mat]);
 
-    if (basic_mat.material->flags.is_set(material_flags::EDIBLE_RAW) ||
-        basic_mat.material->flags.is_set(material_flags::EDIBLE_COOKED))
+    if (!farming)
+    {
+        df::map_block *block = Maps::getTileBlock(plant->pos);
+        if (block && tileMaterial(block->tiletype[plant->pos.x % 16][plant->pos.y % 16]) == tiletype_material::TREE)
+            return Designations::markPlant(plant);
+    }
+
+    if (basic_mat.isValid() &&
+        (basic_mat.material->flags.is_set(material_flags::EDIBLE_RAW) ||
+         basic_mat.material->flags.is_set(material_flags::EDIBLE_COOKED)))
     {
         return Designations::markPlant(plant);
     }
@@ -286,8 +297,9 @@ bool designate(const df::plant *plant, bool farming) {
         }
     }
 
-    if (basic_mat.material->reaction_product.id.size() > 0 ||
-        basic_mat.material->reaction_class.size() > 0)
+    if (basic_mat.isValid() &&
+        (basic_mat.material->reaction_product.id.size() > 0 ||
+         basic_mat.material->reaction_class.size() > 0))
     {
         if (!farming) {
             return Designations::markPlant(plant);
@@ -310,10 +322,11 @@ bool designate(const df::plant *plant, bool farming) {
 
                 if (plant_raw->growths[i]->item_type == df::item_type::PLANT_GROWTH)
                 {
-                    for (size_t k = 0; growth_mat.material->reaction_product.material.mat_type.size(); k++)
+                    auto &mat = growth_mat.material->reaction_product.material;
+                    for (size_t k = 0; k < mat.mat_type.size(); k++)
                     {
-                        if (growth_mat.material->reaction_product.material.mat_type[k] == plant_raw->material_defs.type[plant_material_def::seed] &&
-                            growth_mat.material->reaction_product.material.mat_index[k] == plant_raw->material_defs.idx[plant_material_def::seed])
+                        if (mat.mat_type[k] == plant_raw->material_defs.type[plant_material_def::seed] &&
+                            mat.mat_index[k] == plant_raw->material_defs.idx[plant_material_def::seed])
                         {
                             seedSource = true;
                             break;
@@ -525,15 +538,22 @@ command_result df_getplants (color_ostream &out, vector <string> & parameters)
     for (size_t i = 0; i < world->plants.all.size(); i++)
     {
         const df::plant *plant = world->plants.all[i];
+        const int32_t mat = plant->material;
+        if (mat < 0 || static_cast<size_t>(mat) >= world->raws.plants.all.size())
+        {
+            out.printerr("getplants: skipping plant with invalid material index %d\n", mat);
+            continue;
+        }
+
         df::map_block *cur = Maps::getTileBlock(plant->pos);
 
         int x = plant->pos.x % 16;
         int y = plant->pos.y % 16;
-        if (plantSelections[plant->material] == selectability::OutOfSeason ||
-            plantSelections[plant->material] == selectability::Selectable)
+        if (plantSelections[mat] == selectability::OutOfSeason ||
+            plantSelections[mat] == selectability::Selectable)
         {
             if (exclude ||
-                plantSelections[plant->material] == selectability::OutOfSeason)
+                plantSelections[mat] == selectability::OutOfSeason)
                 continue;
         }
         else
@@ -550,17 +570,17 @@ command_result df_getplants (color_ostream &out, vector <string> & parameters)
             continue;
         if (cur->designation[x][y].bits.hidden)
             continue;
-        if (collectionCount[plant->material] >= maxCount)
+        if (collectionCount[mat] >= maxCount)
             continue;
         if (deselect && Designations::unmarkPlant(plant))
         {
-            collectionCount[plant->material]++;
+            collectionCount[mat]++;
             ++count;
         }
         if (!deselect && designate(plant, farming))
         {
 //            out.print("Designated %s at (%i, %i, %i), %d\n", world->raws.plants.all[plant->material]->id.c_str(), plant->pos.x, plant->pos.y, plant->pos.z, (int)i);
-            collectionCount[plant->material]++;
+            collectionCount[mat]++;
             ++count;
         }
     }

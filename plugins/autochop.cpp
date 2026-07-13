@@ -282,14 +282,21 @@ static bool skip_plant(const df::plant * plant, bool *restricted)
 
 static int estimate_logs(const df::plant *plant)
 {
+    if (!plant->tree_info)
+        return 0;
+
     //adapted from code by aljohnston112 @ github
     df::plant_tree_tile** tiles = plant->tree_info->body;
-    df::plant_tree_tile* tilesRow;
+    if (!tiles)
+        return 0;
 
     int trunks = 0;
+    const int area = plant->tree_info->dim_y * plant->tree_info->dim_x;
     for (int i = 0; i < plant->tree_info->body_height; i++) {
-        tilesRow = tiles[i];
-        for (int j = 0; j < plant->tree_info->dim_y*plant->tree_info->dim_x; j++) {
+        df::plant_tree_tile* tilesRow = tiles[i];
+        if (!tilesRow)
+            return 0;
+        for (int j = 0; j < area; j++) {
             trunks += tilesRow[j].bits.trunk;
         }
     }

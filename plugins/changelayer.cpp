@@ -136,6 +136,11 @@ command_result changelayer (color_ostream &out, std::vector <std::string> & para
     // get biome and geolayer at cursor position
     uint32_t biome = des.bits.biome;
     uint32_t layer = des.bits.geolayer_index;
+    if (biome >= eBiomeCount)
+    {
+        out.printerr("Invalid biome index at the cursor.\n");
+        return CR_FAILURE;
+    }
     if(verbose)
     {
         out << "biome: " << biome << endl
@@ -164,7 +169,7 @@ command_result changelayer (color_ostream &out, std::vector <std::string> & para
     {
         if(verbose)
             out << "---Biome: " << i;
-        if(!all_biomes && uint32_t(i)!=biome)
+        if(!all_biomes && i != b->getRaw()->region_offset[biome])
         {
             if(verbose)
                 out << "-skipping" << endl;
@@ -180,10 +185,10 @@ command_result changelayer (color_ostream &out, std::vector <std::string> & para
         // regionX is in embark squares
         // regionX/16 is in 16x16 embark square regions
         // i provides -1 .. +1 offset from the current region
-        int bioRX = world->map.region_x / 16 + ((i % 3) - 1);
+        int bioRX = (cursorX / 48 + regionX) / 16 + ((i % 3) - 1);
         if (bioRX < 0) bioRX = 0;
         if (bioRX >= world->world_data->world_width) bioRX = world->world_data->world_width - 1;
-        int bioRY = world->map.region_y / 16 + ((i / 3) - 1);
+        int bioRY = (cursorY / 48 + regionY) / 16 + ((i / 3) - 1);
         if (bioRY < 0) bioRY = 0;
         if (bioRY >= world->world_data->world_height) bioRY = world->world_data->world_height - 1;
 

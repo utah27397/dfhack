@@ -312,10 +312,11 @@ namespace CSP {
         int32_t tick = df::global::world->frame_counter;
         auto report_id = (int32_t)(intptr_t(r));
         if (df::global::world) {
-            std::vector<df::report*> &reports = df::global::world->status.reports;
-            size_t idx = -1;
-            idx = df::report::binsearch_index(reports, report_id);
-            df::report* report = reports.at(idx);
+            df::report* report = df::report::find(report_id);
+            if (!report) {
+                WARN(plugin).print("Error: NewReportEvent() received an invalid report_id - a report* cannot be found\n");
+                return;
+            }
             switch (report->type) {
                 case announcement_type::CANCEL_JOB:
                     if (config.insta_dig) {

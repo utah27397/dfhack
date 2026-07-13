@@ -75,6 +75,15 @@ DFhackCExport command_result plugin_onupdate ( color_ostream &out )
                 break;
             }
 
+            // Let idle dwarves meander and fulfill needs normally.
+            if (!unit->job.current_job)
+                break;
+
+            // Avoid teleporting through disconnected areas or into unrevealed tiles.
+            if (!Maps::canWalkBetween(unit->pos, unit->path.dest)
+                    || !Maps::isTileVisible(unit->path.dest))
+                break;
+
             if (!Units::teleport(unit, unit->path.dest))
                 break;
 

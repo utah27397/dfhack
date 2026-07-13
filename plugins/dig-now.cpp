@@ -9,14 +9,17 @@
 
 #include "modules/Buildings.h"
 #include "modules/Gui.h"
+#include "modules/Items.h"
 #include "modules/Maps.h"
 #include "modules/MapCache.h"
 #include "modules/Random.h"
 #include "modules/Units.h"
 #include "modules/World.h"
 
+#include <df/builtin_mats.h>
 #include <df/historical_entity.h>
 #include <df/map_block.h>
+#include <df/material.h>
 #include <df/reaction_product_itemst.h>
 #include <df/tile_designation.h>
 #include <df/tile_occupancy.h>
@@ -225,21 +228,28 @@ static void clean_ramp(MapExtras::MapCache &map, const DFCoord &pos) {
     if (is_wall(map, DFCoord(pos.x-1, pos.y, pos.z)) ||
             is_wall(map, DFCoord(pos.x+1, pos.y, pos.z)) ||
             is_wall(map, DFCoord(pos.x, pos.y-1, pos.z)) ||
-            is_wall(map, DFCoord(pos.x, pos.y+1, pos.z)))
+            is_wall(map, DFCoord(pos.x, pos.y+1, pos.z)) ||
+            is_wall(map, DFCoord(pos.x-1, pos.y-1, pos.z)) ||
+            is_wall(map, DFCoord(pos.x-1, pos.y+1, pos.z)) ||
+            is_wall(map, DFCoord(pos.x+1, pos.y-1, pos.z)) ||
+            is_wall(map, DFCoord(pos.x+1, pos.y+1, pos.z)))
         return;
 
     remove_ramp_top(map, DFCoord(pos.x, pos.y, pos.z+1));
     dig_shape(map,pos, tt, df::tiletype_shape::FLOOR);
 }
 
-// removes self and/or orthogonally adjacent ramps that are no longer adjacent
-// to a wall
+// removes self and/or adjacent ramps that are no longer adjacent to a wall
 static void clean_ramps(MapExtras::MapCache &map, const DFCoord &pos) {
     clean_ramp(map, pos);
     clean_ramp(map, DFCoord(pos.x-1, pos.y, pos.z));
     clean_ramp(map, DFCoord(pos.x+1, pos.y, pos.z));
     clean_ramp(map, DFCoord(pos.x, pos.y-1, pos.z));
     clean_ramp(map, DFCoord(pos.x, pos.y+1, pos.z));
+    clean_ramp(map, DFCoord(pos.x-1, pos.y-1, pos.z));
+    clean_ramp(map, DFCoord(pos.x-1, pos.y+1, pos.z));
+    clean_ramp(map, DFCoord(pos.x+1, pos.y-1, pos.z));
+    clean_ramp(map, DFCoord(pos.x+1, pos.y+1, pos.z));
 }
 
 // destroys any colonies located at pos
@@ -261,7 +271,7 @@ struct dug_tile_info {
     DFCoord pos;
     df::tiletype_material tmat;
     df::item_type itype;
-    int32_t imat; // mat idx of boulder/gem potentially generated at this pos
+    t_matpair imat; // material of boulder/gem potentially generated at this pos
 
     dug_tile_info(MapExtras::MapCache &map, const DFCoord &pos) {
         this->pos = pos;
@@ -269,21 +279,35 @@ struct dug_tile_info {
         df::tiletype tt = map.tiletypeAt(pos);
         tmat = tileMaterial(tt);
 
-        switch (map.BlockAtTile(pos)->veinTypeAt(pos)) {
-            case df::inclusion_type::CLUSTER_ONE:
-            case df::inclusion_type::CLUSTER_SMALL:
-                itype = df::item_type::ROUGH;
+        itype = df::item_type::BOULDER;
+        imat = t_matpair();
+
+        df::tiletype_shape shape = tileShape(tt);
+        if (shape != df::tiletype_shape::WALL
+                && shape != df::tiletype_shape::FORTIFICATION)
+            return;
+
+        switch (tmat) {
+            case df::tiletype_material::STONE:
+            case df::tiletype_material::MINERAL:
+            case df::tiletype_material::FEATURE:
+            case df::tiletype_material::LAVA_STONE:
+                imat = map.baseMaterialAt(pos);
+                break;
+            case df::tiletype_material::FROZEN_LIQUID:
+                // baseMaterialAt() reports the riverbed instead of the ice.
+                imat = t_matpair(df::builtin_mats::WATER, -1);
                 break;
             default:
-                itype = df::item_type::BOULDER;
+                return;
         }
 
-        imat = -1;
-        if (tileShape(tt) == df::tiletype_shape::WALL
-                && (tmat == df::tiletype_material::STONE
-                    || tmat == df::tiletype_material::MINERAL
-                    || tmat == df::tiletype_material::FEATURE))
-            imat = map.baseMaterialAt(pos).mat_index;
+        MaterialInfo mi(imat);
+        if (!mi.isValid())
+            return;
+
+        if (mi.material->flags.is_set(df::material_flags::IS_GEM))
+            itype = df::item_type::ROUGH;
     }
 };
 
@@ -292,11 +316,8 @@ static bool is_diggable(MapExtras::MapCache &map, const DFCoord &pos,
     df::tiletype_material mat = tileMaterial(tt);
     switch (mat) {
     case df::tiletype_material::CONSTRUCTION:
-    case df::tiletype_material::POOL:
-    case df::tiletype_material::RIVER:
     case df::tiletype_material::TREE:
     case df::tiletype_material::ROOT:
-    case df::tiletype_material::LAVA_STONE:
     case df::tiletype_material::MAGMA:
     case df::tiletype_material::HFS:
     case df::tiletype_material::UNDERWORLD_GATE:
@@ -305,12 +326,10 @@ static bool is_diggable(MapExtras::MapCache &map, const DFCoord &pos,
         break;
     }
 
-    if (mat == df::tiletype_material::FEATURE) {
-        // adamantine is the only is diggable feature
-        t_feature feature;
-        return map.BlockAtTile(pos)->GetLocalFeature(&feature)
-                && feature.type == feature_type::deep_special_tube;
-    }
+    MaterialInfo mi(map.baseMaterialAt(pos));
+    if (mi.isValid()
+            && mi.material->flags.is_set(df::material_flags::UNDIGGABLE))
+        return false;
 
     return true;
 }
@@ -352,6 +371,8 @@ static bool dig_tile(color_ostream &out, MapExtras::MapCache &map,
                     clean_ramps(map, pos_below);
                     if (td_below == df::tile_dig_designation::Default)
                         dig_tile(out, map, pos_below, td_below, dug_tiles);
+                    clean_ramps(map, pos);
+                    propagate_vertical_flags(map, pos);
                     return true;
                 }
             }
@@ -392,6 +413,7 @@ static bool dig_tile(color_ostream &out, MapExtras::MapCache &map,
                     map.setTiletypeAt(pos_above,
                             get_target_type(tt, df::tiletype_shape::RAMP_TOP));
                     remove_ramp_top(map, DFCoord(pos.x, pos.y, pos.z+2));
+                    propagate_vertical_flags(map, pos_above);
                 }
             }
             break;
@@ -409,6 +431,8 @@ static bool dig_tile(color_ostream &out, MapExtras::MapCache &map,
 
     dug_tiles.push_back(dug_tile_info(map, pos));
     dig_type(map, pos, target_type);
+
+    clean_ramps(map, pos);
 
     // let light filter down to newly exposed tiles
     propagate_vertical_flags(map, pos);
@@ -587,7 +611,19 @@ static bool produces_item(const boulder_percent_options &options,
     return rng.random(100) < probability;
 }
 
-typedef std::map<std::pair<df::item_type, int32_t>, std::vector<DFCoord>>
+typedef std::pair<df::item_type, t_matpair> item_key_t;
+
+struct item_key_less {
+    bool operator()(const item_key_t &a, const item_key_t &b) const {
+        if (a.first != b.first)
+            return a.first < b.first;
+        if (a.second.mat_type != b.second.mat_type)
+            return a.second.mat_type < b.second.mat_type;
+        return a.second.mat_index < b.second.mat_index;
+    }
+};
+
+typedef std::map<item_key_t, std::vector<DFCoord>, item_key_less>
     item_coords_t;
 
 static void do_dig(color_ostream &out, std::vector<DFCoord> &dug_coords,
@@ -620,7 +656,7 @@ static void do_dig(color_ostream &out, std::vector<DFCoord> &dug_coords,
 
                             dug_coords.push_back(info.pos);
                             refresh_adjacent_smooth_walls(map, info.pos);
-                            if (info.imat < 0)
+                            if (info.imat.mat_type < 0)
                                 continue;
                             if (produces_item(options.boulder_percents,
                                               map, rng, info)) {
@@ -698,8 +734,8 @@ static void create_boulders(color_ostream &out,
 
         prod->item_type = entry.first.first;
         prod->item_subtype = -1;
-        prod->mat_type = 0;
-        prod->mat_index = entry.first.second;
+        prod->mat_type = entry.first.second.mat_type;
+        prod->mat_index = entry.first.second.mat_index;
         prod->probability = 100;
         prod->product_dimension = 1;
 
@@ -805,10 +841,19 @@ static void post_process_dug_tiles(color_ostream &out,
             }
 
             if (to.bits.item) {
-                for (auto item : world->items.other.IN_PLAY) {
-                    if (item->pos == pos && item->flags.bits.on_ground)
-                        item->moveToGround(
-                                resting_pos.x, resting_pos.y, resting_pos.z);
+                std::vector<df::item*> items;
+                if (auto block = Maps::ensureTileBlock(pos)) {
+                    for (auto item_id : block->items) {
+                        auto item = df::item::find(item_id);
+                        if (item && item->pos == pos)
+                            items.emplace_back(item);
+                    }
+                }
+                if (!items.empty()) {
+                    MapExtras::MapCache item_map;
+                    for (auto item : items)
+                        Items::moveToGround(item_map, item, resting_pos);
+                    item_map.WriteAll();
                 }
             }
         }

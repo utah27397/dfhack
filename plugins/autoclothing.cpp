@@ -19,6 +19,7 @@
 #include "df/itemdef_shoesst.h"
 #include "df/itemdef_helmst.h"
 #include "df/itemdef_pantsst.h"
+#include "df/items_other_id.h"
 #include "df/manager_order.h"
 #include "df/creature_raw.h"
 #include "df/world.h"
@@ -474,10 +475,14 @@ static void find_needed_clothing_items()
             for (auto& ownedItem : unit->owned_items)
             {
                 auto item = findItemByID(ownedItem);
+                if (!item)
+                    continue;
 
                 if (item->getType() != clothingOrder.itemType)
                     continue;
                 if (item->getSubtype() != clothingOrder.item_subtype)
+                    continue;
+                if (item->getWear() >= 1)
                     continue;
 
                 MaterialInfo matInfo;
@@ -501,10 +506,12 @@ static void find_needed_clothing_items()
 
 static void remove_available_clothing()
 {
-    for (auto& item : world->items.all)
+    for (auto item : world->items.other[df::items_other_id::IN_PLAY])
     {
         //skip any owned items.
         if (getOwner(item))
+            continue;
+        if (item->getWear() >= 1)
             continue;
 
         //again, for each item, find if any clothing order matches

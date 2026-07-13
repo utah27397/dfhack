@@ -332,7 +332,7 @@ public:
 
         for (auto& th : thresholds)
         {
-            if (lastCounts[th.first] > 0)
+            if (lastCounts.find(th.first) != lastCounts.end())
                 continue;
             auto plant = world->raws.plants.all[th.first];
             out << plant->id << " limit " << getThreshold(th.first) << " current 0" << '\n';

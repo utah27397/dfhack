@@ -150,12 +150,25 @@ int RemoteClient::GetDefaultPort()
             if (in_file)
             {
                 Json::Value config;
-                in_file >> config;
-                in_file.close();
-                if (config.isMember("port")) {
-                    port = config["port"].asInt();
-                    break;
+                try {
+                    in_file >> config;
+                    const Json::Value &port_value = config["port"];
+                    if (port_value.isInt()) {
+                        int config_port = port_value.asInt();
+                        if (config_port >= 1 && config_port <= 65535) {
+                            port = config_port;
+                            break;
+                        }
+                    }
+                    if (!port_value.isNull()) {
+                        std::cerr << "Invalid port in remote server config file: "
+                                  << filename << std::endl;
+                    }
+                } catch (const std::exception &e) {
+                    std::cerr << "Error reading remote server config file: "
+                              << filename << ": " << e.what() << std::endl;
                 }
+                in_file.close();
             }
         }
     }

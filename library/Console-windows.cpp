@@ -36,6 +36,7 @@ POSSIBILITY OF SUCH DAMAGE.
 */
 
 
+#define NOMINMAX
 #include <windows.h>
 #include <conio.h>
 #include <stdarg.h>
@@ -45,6 +46,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <stdio.h>
 #include <fcntl.h>
 #include <io.h>
+#include <algorithm>
 #include <iostream>
 #include <fstream>
 #include <istream>
@@ -230,35 +232,48 @@ namespace DFHack
         void prompt_refresh()
         {
             size_t cols = get_columns();
+            if (!cols)
+                return;
+
             size_t plen = prompt.size();
+            size_t visible_plen = std::min(plen, cols);
             const char * buf = raw_buffer.c_str();
             size_t len = raw_buffer.size();
-            int cooked_cursor = raw_cursor;
+            size_t cooked_cursor = raw_cursor < 0 ? 0 : std::min<size_t>(raw_cursor, len);
 
-            while ((plen + cooked_cursor) >= cols)
+            if (plen >= cols)
             {
-                buf++;
-                len--;
-                cooked_cursor--;
+                len = 0;
+                cooked_cursor = 0;
             }
-            while (plen + len > cols)
+            else
             {
-                len--;
+                if (plen + cooked_cursor > cols)
+                {
+                    size_t adj = std::min(plen + cooked_cursor - cols, len);
+                    buf += adj;
+                    len -= adj;
+                    cooked_cursor -= adj;
+                }
+
+                if (len + plen > cols)
+                    len = cols - plen;
             }
 
             CONSOLE_SCREEN_BUFFER_INFO inf = { 0 };
             GetConsoleScreenBufferInfo(console_out, &inf);
-            output(prompt.c_str(), plen, 0, inf.dwCursorPosition.Y);
-            output(buf, len, plen, inf.dwCursorPosition.Y);
-            if (plen + len < (size_t)inf.dwSize.X)
+            output(prompt.c_str(), visible_plen, 0, inf.dwCursorPosition.Y);
+            if (len)
+                output(buf, len, visible_plen, inf.dwCursorPosition.Y);
+            if (visible_plen + len < (size_t)inf.dwSize.X)
             {
                 // Blank to EOL
-                char* tmp = (char*)malloc(inf.dwSize.X - (plen + len));
-                memset(tmp, ' ', inf.dwSize.X - (plen + len));
-                blankout(tmp, inf.dwSize.X - (plen + len), len + plen, inf.dwCursorPosition.Y);
+                char* tmp = (char*)malloc(inf.dwSize.X - (visible_plen + len));
+                memset(tmp, ' ', inf.dwSize.X - (visible_plen + len));
+                blankout(tmp, inf.dwSize.X - (visible_plen + len), len + visible_plen, inf.dwCursorPosition.Y);
                 free(tmp);
             }
-            inf.dwCursorPosition.X = (SHORT)(cooked_cursor + plen);
+            inf.dwCursorPosition.X = (SHORT)std::min(visible_plen + cooked_cursor, cols - 1);
             SetConsoleCursorPosition(console_out, inf.dwCursorPosition);
         }
 

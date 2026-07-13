@@ -243,26 +243,20 @@ static void doMarkForSlaughter(df::unit *unit) {
     unit->flags2.bits.slaughter = 1;
 }
 
-// getUnitAge() returns 0 if born in current year, therefore the look at birth_time in that case
-// (assuming that the value from there indicates in which tick of the current year the unit was born)
+// Sort younger animals first. ProcessUnits() takes entries from the back, so
+// this makes the oldest adults the first adults selected for slaughter.
 static bool compareUnitAgesYounger(df::unit *i, df::unit *j) {
-    int32_t age_i = (int32_t)Units::getAge(i, true);
-    int32_t age_j = (int32_t)Units::getAge(j, true);
-    if (age_i == 0 && age_j == 0) {
-        age_i = i->birth_time;
-        age_j = j->birth_time;
-    }
-    return age_i < age_j;
+    if (i->birth_year != j->birth_year)
+        return i->birth_year > j->birth_year;
+    return i->birth_time > j->birth_time;
 }
 
+// Sort older animals first. ProcessUnits() takes entries from the back, so this
+// makes the youngest juveniles the first juveniles selected for slaughter.
 static bool compareUnitAgesOlder(df::unit* i, df::unit* j) {
-    int32_t age_i = (int32_t)Units::getAge(i, true);
-    int32_t age_j = (int32_t)Units::getAge(j, true);
-    if(age_i == 0 && age_j == 0) {
-        age_i = i->birth_time;
-        age_j = j->birth_time;
-    }
-    return age_i > age_j;
+    if (i->birth_year != j->birth_year)
+        return i->birth_year < j->birth_year;
+    return i->birth_time < j->birth_time;
 }
 
 enum unit_ptr_index {

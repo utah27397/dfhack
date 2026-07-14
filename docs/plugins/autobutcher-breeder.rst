@@ -8,7 +8,8 @@ autobutcher-breeder
 This plugin is a breeding-oriented counterpart to `autobutcher`. It keeps the
 same female/male and juvenile/adult population targets, but restricts the
 breeder pool to sexually compatible animals and chooses among them so the
-retained stock has the strongest weakest physical attribute.
+retained stock has the strongest weakest physical attribute. Ties are resolved
+by comparing each successively stronger attribute.
 
 Breeder eligibility is evaluated before physical attributes. An eligible
 female must express romantic or marriage interest in males, and an eligible
@@ -25,12 +26,14 @@ allows the plugin to retain the requested number of compatible breeders in
 addition to protected animals that cannot reproduce.
 This strict rule also applies to races added by ``autowatch``.
 
-For each eligible animal, the breeder score is the minimum of its six physical
-attribute potential values: strength, agility, toughness, endurance,
-recuperation, and disease resistance. Among eligible animals, lower-scoring
-animals are selected for slaughter before higher-scoring animals. Potential
-(``max_value``) is used instead of current ability so juveniles and untrained
-animals can be compared fairly. Mental attributes are not included.
+For each eligible animal, the plugin takes its six physical attribute potential
+values (strength, agility, toughness, endurance, recuperation, and disease
+resistance) and sorts them from weakest to strongest. It compares the weakest
+values first, then the second-weakest values when those tie, and continues
+through the strongest values. Therefore, an animal that differs only by having
+a higher strongest attribute is retained. Potential (``max_value``) is used
+instead of current ability so juveniles and untrained animals can be compared
+fairly. Mental attributes are not included.
 
 The plugin requires that you add target races to its watchlist. It has separate
 settings from `autobutcher`. Do not enable both plugins for the same race: both
@@ -49,9 +52,10 @@ they are:
 Untamed, undead, merchant, forest, and non-civilization units are ignored and
 do not count toward the target.
 
-Within equal breeder scores, older adults and younger children are butchered
-first. Defaults are 1 male kid, 5 female kids, 1 male adult, and 5 female
-adults. Use `gaydar` to inspect orientation and `set-orientation` to change it.
+When all six attribute potentials match, younger children and older adults are
+butchered first. Defaults are 1 male kid, 5 female kids, 1 male adult, and 5
+female adults. Use `gaydar` to inspect orientation and `set-orientation` to
+change it.
 
 .. note::
 
@@ -129,8 +133,9 @@ Examples
 --------
 
 Keep at most 7 kids (4 female, 3 male) and at most 3 adults (2 female, 1 male)
-for turkeys. Animals with lower breeder scores will be selected first. When
-scores tie, the oldest adults and youngest kids will be selected first::
+for turkeys. Animals with lower breeder profiles will be selected first. When
+all six potential values tie, the oldest adults and youngest kids will be
+selected first::
 
     autobutcher-breeder target 4 3 2 1 BIRD_TURKEY
 

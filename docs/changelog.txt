@@ -34,7 +34,7 @@ changelog.txt uses a syntax similar to RST, with a few special sequences:
 # Future
 
 ## New Plugins
-- `autobutcher-breeder`: retain sexually compatible animals with the highest minimum physical attribute potential when culling livestock
+- `autobutcher-breeder`: retain sexually compatible animals by comparing physical attribute potential from weakest to strongest when culling livestock
 
 ## Fixes
 

@@ -2,6 +2,7 @@
 // intentionally a separate plugin so it can keep independent watchlist state.
 
 #include <algorithm>
+#include <array>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -276,28 +277,33 @@ static bool compareUnitAgesOlder(df::unit* i, df::unit* j) {
     return i->birth_time < j->birth_time;
 }
 
-// max_value is the unit's long-term attribute potential. The weakest of the
-// six physical attributes is the breeder score, so retaining the highest
-// scores maximizes the minimum physical attribute in the breeding stock.
-static int32_t getBreederScore(df::unit *unit) {
+// max_value is the unit's long-term attribute potential. Sorting the six
+// values weakest-first makes lexicographic comparison maximize the minimum,
+// then the second-lowest value, and so on through the maximum.
+using BreederPotential = std::array<int32_t, 6>;
+
+static BreederPotential getBreederPotential(df::unit *unit) {
     using namespace df::enums::physical_attribute_type;
 
-    int32_t score = unit->body.physical_attrs[STRENGTH].max_value;
-    score = std::min(score, unit->body.physical_attrs[AGILITY].max_value);
-    score = std::min(score, unit->body.physical_attrs[TOUGHNESS].max_value);
-    score = std::min(score, unit->body.physical_attrs[ENDURANCE].max_value);
-    score = std::min(score, unit->body.physical_attrs[RECUPERATION].max_value);
-    return std::min(score,
-        unit->body.physical_attrs[DISEASE_RESISTANCE].max_value);
+    BreederPotential potential = {{
+        unit->body.physical_attrs[STRENGTH].max_value,
+        unit->body.physical_attrs[AGILITY].max_value,
+        unit->body.physical_attrs[TOUGHNESS].max_value,
+        unit->body.physical_attrs[ENDURANCE].max_value,
+        unit->body.physical_attrs[RECUPERATION].max_value,
+        unit->body.physical_attrs[DISEASE_RESISTANCE].max_value,
+    }};
+    std::sort(potential.begin(), potential.end());
+    return potential;
 }
 
-// Higher-scoring units sort first because ProcessUnits() slaughters from the
-// back. Age preserves autobutcher's established selection order for ties.
+// Higher-potential units sort first because ProcessUnits() slaughters from the
+// back. Age preserves autobutcher's selection order when all attributes tie.
 static bool compareJuvenileBreederCandidates(df::unit *i, df::unit *j) {
-    int32_t i_score = getBreederScore(i);
-    int32_t j_score = getBreederScore(j);
-    if (i_score != j_score)
-        return i_score > j_score;
+    auto i_potential = getBreederPotential(i);
+    auto j_potential = getBreederPotential(j);
+    if (i_potential != j_potential)
+        return i_potential > j_potential;
     if (compareUnitAgesOlder(i, j))
         return true;
     if (compareUnitAgesOlder(j, i))
@@ -306,10 +312,10 @@ static bool compareJuvenileBreederCandidates(df::unit *i, df::unit *j) {
 }
 
 static bool compareAdultBreederCandidates(df::unit *i, df::unit *j) {
-    int32_t i_score = getBreederScore(i);
-    int32_t j_score = getBreederScore(j);
-    if (i_score != j_score)
-        return i_score > j_score;
+    auto i_potential = getBreederPotential(i);
+    auto j_potential = getBreederPotential(j);
+    if (i_potential != j_potential)
+        return i_potential > j_potential;
     if (compareUnitAgesYounger(i, j))
         return true;
     if (compareUnitAgesYounger(j, i))

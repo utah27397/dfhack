@@ -2,28 +2,43 @@ autobutcher-breeder
 ===================
 
 .. dfhack-tool::
-    :summary: Retain high-potential breeders and butcher excess livestock.
+    :summary: Retain compatible, high-potential livestock breeders.
     :tags: fort auto fps animals
 
-This plugin is an attribute-selecting counterpart to `autobutcher`. It keeps
-the same female/male and juvenile/adult population targets, but chooses excess
-animals so the retained breeding stock has the strongest weakest physical
-attribute.
+This plugin is a breeding-oriented counterpart to `autobutcher`. It keeps the
+same female/male and juvenile/adult population targets, but restricts the
+breeder pool to sexually compatible animals and chooses among them so the
+retained stock has the strongest weakest physical attribute.
 
-For each animal, the breeder score is the minimum of its six physical
+Breeder eligibility is evaluated before physical attributes. An eligible
+female must express romantic or marriage interest in males, and an eligible
+male must express romantic or marriage interest in females. Bisexual animals
+are eligible. Same-sex-only, asexual, sexless, indeterminate, gelded, and
+soul-less animals are ineligible. DFHack exposes interest by sex, not by
+individual partner, so eligible males and females of the watched race have
+mutually compatible orientations.
+
+Every unprotected ineligible animal is marked for slaughter, even when the
+configured population target has not been reached. Protected ineligible
+animals remain protected but do not count toward the breeder target. This
+allows the plugin to retain the requested number of compatible breeders in
+addition to protected animals that cannot reproduce.
+This strict rule also applies to races added by ``autowatch``.
+
+For each eligible animal, the breeder score is the minimum of its six physical
 attribute potential values: strength, agility, toughness, endurance,
-recuperation, and disease resistance. Lower-scoring animals are selected for
-slaughter before higher-scoring animals within each reproductive-priority
-group. Potential (``max_value``) is used instead of current ability so
-juveniles and untrained animals can be compared fairly. Mental attributes are
-not included since ordinary livestock may not have souls.
+recuperation, and disease resistance. Among eligible animals, lower-scoring
+animals are selected for slaughter before higher-scoring animals. Potential
+(``max_value``) is used instead of current ability so juveniles and untrained
+animals can be compared fairly. Mental attributes are not included.
 
 The plugin requires that you add target races to its watchlist. It has separate
 settings from `autobutcher`. Do not enable both plugins for the same race: both
 write the same slaughter flag, so whichever plugin processes a unit first can
 determine the result.
 
-Units are counted toward the target but protected from slaughter if they are:
+Eligible units count toward the target but are protected from slaughter if
+they are:
 
 * Named or nicknamed (for custom protection; you can use the `rename` ``unit``
   tool individually, or `zone` ``nick`` for groups)
@@ -34,12 +49,9 @@ Units are counted toward the target but protected from slaughter if they are:
 Untamed, undead, merchant, forest, and non-civilization units are ignored and
 do not count toward the target.
 
-Creatures who will not reproduce (because they're not interested in the
-opposite sex or have been gelded) will be butchered before those who will.
 Within equal breeder scores, older adults and younger children are butchered
 first. Defaults are 1 male kid, 5 female kids, 1 male adult, and 5 female
-adults. You may need a target above 1 for a reliable breeding population due
-to asexuality. See `fix-ster` if this is a problem.
+adults. Use `gaydar` to inspect orientation and `set-orientation` to change it.
 
 .. note::
 

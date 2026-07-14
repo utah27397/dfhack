@@ -10,6 +10,7 @@
 #include "df/building_cagest.h"
 #include "df/creature_raw.h"
 #include "df/physical_attribute_type.h"
+#include "df/unit_soul.h"
 #include "df/world.h"
 
 #include "Core.h"
@@ -89,7 +90,7 @@ static void autobutcher_breeder_cycle(color_ostream &out);
 DFhackCExport command_result plugin_init(color_ostream &out, std::vector <PluginCommand> &commands) {
     commands.push_back(PluginCommand(
         plugin_name,
-        "Retain high-potential breeders and butcher excess livestock.",
+        "Retain compatible, high-potential breeders and butcher other livestock.",
         df_autobutcher_breeder));
     return CR_OK;
 }
@@ -243,6 +244,22 @@ static void doMarkForSlaughter(df::unit *unit) {
     unit->flags2.bits.slaughter = 1;
 }
 
+// Require positive evidence of opposite-sex interest. Units without souls do
+// not expose orientation data, so they cannot satisfy strict compatibility.
+static bool isBreederEligible(df::unit *unit) {
+    if (Units::isGelded(unit) || !unit->status.current_soul)
+        return false;
+
+    auto &orientation = unit->status.current_soul->orientation_flags;
+    if (orientation.bits.indeterminate)
+        return false;
+    if (Units::isFemale(unit))
+        return orientation.bits.romance_male || orientation.bits.marry_male;
+    if (Units::isMale(unit))
+        return orientation.bits.romance_female || orientation.bits.marry_female;
+    return false;
+}
+
 // Sort younger animals first. ProcessUnits() takes entries from the back, so
 // this makes the oldest adults the first adults selected for slaughter.
 static bool compareUnitAgesYounger(df::unit *i, df::unit *j) {
@@ -329,8 +346,8 @@ public:
     // butcherable units
     vector<df::unit*> unit_ptr[4];
 
-    // priority butcherable units
-    vector<df::unit*> prot_ptr[4];
+    // Butcherable units that cannot form an opposite-sex breeding pair.
+    vector<df::unit*> incompatible_ptr[4];
 
     WatchedRace(color_ostream &out, int id, bool watch, unsigned _fk, unsigned _mk, unsigned _fa, unsigned _ma) {
         raceId = id;
@@ -384,10 +401,6 @@ public:
         sort(unit_ptr[mk_index].begin(), unit_ptr[mk_index].end(), compareJuvenileBreederCandidates);
         sort(unit_ptr[fa_index].begin(), unit_ptr[fa_index].end(), compareAdultBreederCandidates);
         sort(unit_ptr[ma_index].begin(), unit_ptr[ma_index].end(), compareAdultBreederCandidates);
-        sort(prot_ptr[fk_index].begin(), prot_ptr[fk_index].end(), compareJuvenileBreederCandidates);
-        sort(prot_ptr[mk_index].begin(), prot_ptr[mk_index].end(), compareJuvenileBreederCandidates);
-        sort(prot_ptr[fa_index].begin(), prot_ptr[fa_index].end(), compareAdultBreederCandidates);
-        sort(prot_ptr[ma_index].begin(), prot_ptr[ma_index].end(), compareAdultBreederCandidates);
     }
 
     void PushUnit(df::unit *unit) {
@@ -406,18 +419,18 @@ public:
         }
     }
 
-    void PushPriorityUnit(df::unit *unit) {
+    void PushIncompatibleUnit(df::unit *unit) {
         if(Units::isFemale(unit)) {
             if(Units::isBaby(unit) || Units::isChild(unit))
-                prot_ptr[fk_index].push_back(unit);
+                incompatible_ptr[fk_index].push_back(unit);
             else
-                prot_ptr[fa_index].push_back(unit);
+                incompatible_ptr[fa_index].push_back(unit);
         }
         else {
             if(Units::isBaby(unit) || Units::isChild(unit))
-                prot_ptr[mk_index].push_back(unit);
+                incompatible_ptr[mk_index].push_back(unit);
             else
-                prot_ptr[ma_index].push_back(unit);
+                incompatible_ptr[ma_index].push_back(unit);
         }
     }
 
@@ -440,22 +453,27 @@ public:
         fk_prot = fa_prot = mk_prot = ma_prot = 0;
         for (size_t i = 0; i < 4; i++) {
             unit_ptr[i].clear();
-            prot_ptr[i].clear();
+            incompatible_ptr[i].clear();
         }
     }
 
-    int ProcessUnits(vector<df::unit*>& unit_ptr, vector<df::unit*>& unit_pri_ptr, unsigned prot, unsigned goal) {
+    int ProcessUnits(vector<df::unit*>& eligible_ptr,
+                     vector<df::unit*>& incompatible_ptr,
+                     unsigned protected_eligible,
+                     unsigned goal) {
         int subcount = 0;
-        while (unit_pri_ptr.size() && (unit_ptr.size() + unit_pri_ptr.size() + prot > goal)) {
-            df::unit *unit = unit_pri_ptr.back();
+        // Incompatible units are not breeding stock and never satisfy a quota.
+        while (incompatible_ptr.size()) {
+            df::unit *unit = incompatible_ptr.back();
             doMarkForSlaughter(unit);
-            unit_pri_ptr.pop_back();
+            incompatible_ptr.pop_back();
             subcount++;
         }
-        while (unit_ptr.size() && (unit_ptr.size() + prot > goal)) {
-            df::unit *unit = unit_ptr.back();
+        while (eligible_ptr.size() &&
+               eligible_ptr.size() + protected_eligible > goal) {
+            df::unit *unit = eligible_ptr.back();
             doMarkForSlaughter(unit);
-            unit_ptr.pop_back();
+            eligible_ptr.pop_back();
             subcount++;
         }
         return subcount;
@@ -464,10 +482,10 @@ public:
     int ProcessUnits() {
         SortUnitsByBreederPotential();
         int slaughter_count = 0;
-        slaughter_count += ProcessUnits(unit_ptr[fk_index], prot_ptr[fk_index], fk_prot, fk);
-        slaughter_count += ProcessUnits(unit_ptr[mk_index], prot_ptr[mk_index], mk_prot, mk);
-        slaughter_count += ProcessUnits(unit_ptr[fa_index], prot_ptr[fa_index], fa_prot, fa);
-        slaughter_count += ProcessUnits(unit_ptr[ma_index], prot_ptr[ma_index], ma_prot, ma);
+        slaughter_count += ProcessUnits(unit_ptr[fk_index], incompatible_ptr[fk_index], fk_prot, fk);
+        slaughter_count += ProcessUnits(unit_ptr[mk_index], incompatible_ptr[mk_index], mk_prot, mk);
+        slaughter_count += ProcessUnits(unit_ptr[fa_index], incompatible_ptr[fa_index], fa_prot, fa);
+        slaughter_count += ProcessUnits(unit_ptr[ma_index], incompatible_ptr[ma_index], ma_prot, ma);
         ClearUnits();
         return slaughter_count;
     }
@@ -773,7 +791,7 @@ static bool isInappropriateUnit(df::unit *unit) {
         || !Units::isOwnCiv(unit);
 }
 
-// Protected units count towards the configured quotas but are never selected.
+// Eligible protected units count towards quotas but are never selected.
 static bool isProtectedUnit(df::unit *unit) {
     return Units::isWar(unit)
         || Units::isHunter(unit)
@@ -810,8 +828,8 @@ static void autobutcher_breeder_cycle(color_ostream &out) {
         // this check is now divided into two steps, squeezed autowatch into the middle
         // first one ignores completely inappropriate units (dead, undead, not belonging to the fort, ...)
         // then let autowatch add units to the watchlist which will probably start breeding (owned pets, war animals, ...)
-        // then process units counting those which can't be butchered (war animals, named pets, ...)
-        // so that they are treated as "own stock" as well and count towards the target quota
+        // then preserve protected units (war animals, named pets, ...); only
+        // breeder-eligible protected units count towards the target quota
         if (   isInappropriateUnit(unit)
             || Units::isMarkedForSlaughter(unit)
             || !Units::isTame(unit)
@@ -842,14 +860,15 @@ static void autobutcher_breeder_cycle(color_ostream &out) {
         }
 
         if (w->isWatched) {
-            // don't butcher protected units, but count them as stock as well
-            // this way they count towards target quota, so if you order that you want 1 female adult cat
-            // and have 2 cats, one of them being a pet, the other gets butchered
-            if (isProtectedUnit(unit))
-                w->PushProtectedUnit(unit);
-            else if (   Units::isGay(unit)
-                     || Units::isGelded(unit))
-                w->PushPriorityUnit(unit);
+            bool breeder_eligible = isBreederEligible(unit);
+            // Protected incompatible units remain protected, but they do not
+            // reduce the number of compatible breeders retained for the quota.
+            if (isProtectedUnit(unit)) {
+                if (breeder_eligible)
+                    w->PushProtectedUnit(unit);
+            }
+            else if (!breeder_eligible)
+                w->PushIncompatibleUnit(unit);
             else
                 w->PushUnit(unit);
         }

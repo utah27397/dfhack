@@ -34,6 +34,7 @@ changelog.txt uses a syntax similar to RST, with a few special sequences:
 # Future
 
 ## New Plugins
+- `autobutcher-breeder`: retain animals with the highest minimum physical attribute potential when culling excess livestock
 
 ## Fixes
 

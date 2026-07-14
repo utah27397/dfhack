@@ -928,8 +928,16 @@ WatchedRace * checkRaceStocksProtected(color_ostream &out, int race) {
         if (!isContainedInItem(unit) && !hasValidMapPos(unit))
             continue;
 
+        // Keep the vanilla protected-stock tally for display, and separately
+        // count only the eligible protected units that consume breeder quota.
         if (!Units::isTame(unit) || isProtectedUnit(unit))
             w->PushUnit(unit);
+        if (   Units::isTame(unit)
+            && !Units::isMarkedForSlaughter(unit)
+            && isProtectedUnit(unit)
+            && isBreederEligible(unit)
+            )
+            w->PushProtectedUnit(unit);
     }
     return w;
 }
@@ -1133,6 +1141,10 @@ static int autobutcher_breeder_getWatchList(lua_State *L) {
         Lua::SetField(L, tally->unit_ptr[mk_index].size(), ctable, "mk_protected");
         Lua::SetField(L, tally->unit_ptr[fa_index].size(), ctable, "fa_protected");
         Lua::SetField(L, tally->unit_ptr[ma_index].size(), ctable, "ma_protected");
+        Lua::SetField(L, tally->fk_prot, ctable, "fk_protected_eligible");
+        Lua::SetField(L, tally->mk_prot, ctable, "mk_protected_eligible");
+        Lua::SetField(L, tally->fa_prot, ctable, "fa_protected_eligible");
+        Lua::SetField(L, tally->ma_prot, ctable, "ma_protected_eligible");
         delete tally;
 
         tally = checkRaceStocksButcherable(*out, id);

@@ -19,21 +19,23 @@ soul-less animals are ineligible. DFHack exposes interest by sex, not by
 individual partner, so eligible males and females of the watched race have
 mutually compatible orientations.
 
-Every unprotected ineligible animal is marked for slaughter, even when the
-configured population target has not been reached. Protected ineligible
-animals remain protected but do not count toward the breeder target. This
-allows the plugin to retain the requested number of compatible breeders in
-addition to protected animals that cannot reproduce.
-This strict rule also applies to races added by ``autowatch``.
+Unprotected ineligible animals count toward the population target and remain
+unmarked while the target has not been exceeded. Once a target is exceeded,
+ineligible animals have first priority for slaughter. If more animals must be
+culled after that group is exhausted, the lowest-ranked eligible animals are
+selected. Protected ineligible animals remain protected but do not count
+toward the breeder target. This allows the plugin to retain the requested
+number of compatible breeders in addition to protected animals that cannot
+reproduce. These rules also apply to races added by ``autowatch``.
 
-For each eligible animal, the plugin takes its six physical attribute potential
-values (strength, agility, toughness, endurance, recuperation, and disease
-resistance) and sorts them from weakest to strongest. It compares the weakest
-values first, then the second-weakest values when those tie, and continues
-through the strongest values. Therefore, an animal that differs only by having
-a higher strongest attribute is retained. Potential (``max_value``) is used
-instead of current ability so juveniles and untrained animals can be compared
-fairly. Mental attributes are not included.
+Within each eligibility group, the plugin takes each animal's six physical
+attribute potential values (strength, agility, toughness, endurance,
+recuperation, and disease resistance) and sorts them from weakest to strongest.
+It compares the weakest values first, then the second-weakest values when those
+tie, and continues through the strongest values. Therefore, an animal that
+differs only by having a higher strongest attribute is retained. Potential
+(``max_value``) is used instead of current ability so juveniles and untrained
+animals can be compared fairly. Mental attributes are not included.
 
 The plugin requires that you add target races to its watchlist. It has separate
 settings from `autobutcher`. Do not enable both plugins for the same race: both

@@ -407,6 +407,14 @@ public:
         sort(unit_ptr[mk_index].begin(), unit_ptr[mk_index].end(), compareJuvenileBreederCandidates);
         sort(unit_ptr[fa_index].begin(), unit_ptr[fa_index].end(), compareAdultBreederCandidates);
         sort(unit_ptr[ma_index].begin(), unit_ptr[ma_index].end(), compareAdultBreederCandidates);
+        sort(incompatible_ptr[fk_index].begin(), incompatible_ptr[fk_index].end(),
+             compareJuvenileBreederCandidates);
+        sort(incompatible_ptr[mk_index].begin(), incompatible_ptr[mk_index].end(),
+             compareJuvenileBreederCandidates);
+        sort(incompatible_ptr[fa_index].begin(), incompatible_ptr[fa_index].end(),
+             compareAdultBreederCandidates);
+        sort(incompatible_ptr[ma_index].begin(), incompatible_ptr[ma_index].end(),
+             compareAdultBreederCandidates);
     }
 
     void PushUnit(df::unit *unit) {
@@ -468,8 +476,10 @@ public:
                      unsigned protected_eligible,
                      unsigned goal) {
         int subcount = 0;
-        // Incompatible units are not breeding stock and never satisfy a quota.
-        while (incompatible_ptr.size()) {
+        // Cull incompatible units first, but only when the population cap has
+        // been exceeded. This preserves them when there is spare capacity.
+        while (incompatible_ptr.size() && eligible_ptr.size() +
+               incompatible_ptr.size() + protected_eligible > goal) {
             df::unit *unit = incompatible_ptr.back();
             doMarkForSlaughter(unit);
             incompatible_ptr.pop_back();

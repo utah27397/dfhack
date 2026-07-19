@@ -23,10 +23,14 @@ Unprotected ineligible animals count toward the population target and remain
 unmarked while the target has not been exceeded. Once a target is exceeded,
 ineligible animals have first priority for slaughter. If more animals must be
 culled after that group is exhausted, the lowest-ranked eligible animals are
-selected. Protected ineligible animals remain protected but do not count
-toward the breeder target. This allows the plugin to retain the requested
-number of compatible breeders in addition to protected animals that cannot
-reproduce. These rules also apply to races added by ``autowatch``.
+selected. Protected animals do not count toward the target, regardless of
+breeder eligibility. This allows the plugin to retain the requested number of
+unprotected breeders in addition to animals that cannot be slaughtered. These
+rules also apply to races added by ``autowatch``.
+
+Animals that already have a slaughter flag are left untouched and do not count
+toward the target. This preserves manual slaughter decisions. The plugin only
+ranks animals that are both unmarked and unprotected during the current cycle.
 
 Within each eligibility group, the plugin takes each animal's six physical
 attribute potential values (strength, agility, toughness, endurance,
@@ -42,8 +46,8 @@ settings from `autobutcher`. Do not enable both plugins for the same race: both
 write the same slaughter flag, so whichever plugin processes a unit first can
 determine the result.
 
-Eligible units count toward the target but are protected from slaughter if
-they are:
+Units do not count toward the target and are protected from slaughter if they
+are:
 
 * Named or nicknamed (for custom protection; you can use the `rename` ``unit``
   tool individually, or `zone` ``nick`` for groups)
